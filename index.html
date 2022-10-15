@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Default html</title>
+<link href="style.css" rel="stylesheet">
+<link href="ds-file-manager.css" rel="stylesheet">
+<link rel="icon" type="image/png" href="favico.png" />
+</head>
+<body>
+<h1>Default html</h1>
+<p>This is default html page</p>
+
+<form action=""" method="post" id="my_form">
+    <div class="fieldGroup">
+        <label>File 1</label>
+        <input multiple type="file" name="file1"/>
+    </div>
+    <div class="fieldGroup">
+        <label>File 2</label>
+        <input type="file" name="file2"/>
+    </div>
+
+    <div class="dropZone"  id="drop" data-name="dropZone1">Drop Zone 1</div>
+    <div class="dropZone" droppable  data-name="dropZone2">Drop Zone 2</div>
+
+    
+    <input type="submit"/>
+
+</form>
+
+<div id="my_form__fileManager" class="ds-file-manager"></div>
+
+<script src="ds-file-uploader.js"></script>
+<script src="ds-file-manager.js"></script>
+<script>
+
+
+    let fileUploader = new DSFileUploader("my_form", {
+
+    });
+
+
+</script>
+</body>
+</html>
