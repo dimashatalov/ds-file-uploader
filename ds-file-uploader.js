@@ -7,6 +7,10 @@ function DSFileUploader(formID, settings)
     var plugins = {};
     
     const construct = function() {
+
+        settings.get = get;
+        settings.set = set;
+                
         findFormObject();  
         findFormElements();
         findDropZones();
@@ -25,7 +29,7 @@ function DSFileUploader(formID, settings)
         if (typeof DSFileManager !== "undefined") {
 
             if (typeof settings.fileManagerTarget === "undefined") {
-                fileManagerTarget = formID + "__fileManager";
+                fileManagerTarget = formID + "__file-manager";
             }
             else  {
                 fileManagerTarget = settings.fileManagerTarget;
@@ -33,11 +37,9 @@ function DSFileUploader(formID, settings)
 
             plugins.dsFileManager = new DSFileManager({
                 fileManagerTarget : fileManagerTarget,
-                onNewFilePush: function() {
-                    let files = get("files");                    
-                    plugins.dsFileManager.setFiles(files);
-                    plugins.dsFileManager.drawFiles();
-                    
+                onFileDelete : function() {
+                    areAllFilesLoaded();
+                    launchPublicFunction("onFileDelete",false);
                 }
             });
         }
@@ -128,23 +130,16 @@ function DSFileUploader(formID, settings)
             this.file.loaded = 1;
 
             areAllFilesLoaded();
+            launchPublicFunction("onFileReady", false);
         }
 
         addFile(file);  
         
         
+        
     }
 
     const launchPublicFunction = function(funcName, interrupt) {
-
-
-        for (let pluginName in plugins) {
-        
-        
-            if (typeof plugins[pluginName].settings != "undefined" && typeof plugins[pluginName].settings[funcName] != "undefined") {
-                plugins[pluginName].settings[funcName]();
-            }
-        }
 
         if (typeof settings[funcName] === "undefined") {
             return false;
@@ -172,11 +167,18 @@ function DSFileUploader(formID, settings)
             launchPublicFunction("onAllFilesReady");
 
         launchPublicFunction("onNewFilePush");
+
+        if (typeof  plugins.dsFileManager !== "undefined") {
+            let files = get("files");                    
+            plugins.dsFileManager.setFiles(files);
+            plugins.dsFileManager.drawFiles();
+        }         
     }
     
 
     const onInputFileChange = function(e) {
         let input = this.input;
+        
         let inputFiles = [...this.input.obj.files];
 
         for (let i in inputFiles) {
@@ -186,9 +188,11 @@ function DSFileUploader(formID, settings)
             file.source = "input";
       
             processFile(file);
-              
-         
+                
+        
         }
+        
+        
     }
 
     const onDrop = function(ev) {
@@ -253,6 +257,9 @@ function DSFileUploader(formID, settings)
             dropZone.obj.addEventListener("drop", onDropTmp);
             dropZone.obj.addEventListener("dragover", function(e) { e.preventDefault();});            
             dropZone.obj.addEventListener("dragleave", function(e) { e.preventDefault();});        
+            dropZone.obj.addEventListener("click", function(e) { this.value = null;});        
+
+            
                 
         }
 
@@ -268,9 +275,31 @@ function DSFileUploader(formID, settings)
                 fileInputs[name] = elements[name];
             }
         }
-
+        console.log("fileInputsfileInputs", fileInputs);
         set("fileInputs", fileInputs);
         return fileInputs;
+    }
+
+
+
+    settings.getCleanFiles = function() {
+        let files = get("files");
+        let cleanFiles = [];
+
+        for (let i = 0; i < files.length; i++ ) {
+            let file = files[i];
+
+            cleanFiles.push({
+                base64 : file.base64,
+                source: file.source,
+                lastModified: file.lastModified,
+                name : file.name,
+                size : file.size,
+                type : file.type
+            });
+        }
+
+        return [...cleanFiles];
     }
 
     const set = function(k, v) {

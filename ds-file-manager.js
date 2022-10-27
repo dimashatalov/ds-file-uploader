@@ -26,6 +26,10 @@ function DSFileManager(settings)
         
         let target = document.getElementById(settings.fileManagerTarget);
 
+        if (!target) {
+            console.log("There is no target/main div for DSFileManager");
+            return false;
+        }
      
         let mainContainer = document.createElement("div");
         mainContainer.classList.add("ds-file-manager");
@@ -45,14 +49,14 @@ function DSFileManager(settings)
         let mainContainer = get("mainContainer");
 
         let domFiles =  Array.from(mainContainer.querySelectorAll(".ds-file-manager__file"));
-        console.log("domFilesdomFiles", domFiles);
+        
         //Remove same file from dom
         for (let i in files) {
             let file = files[i];
             
             if (typeof file.isDrawn == "undefined") {
                 for (let j in domFiles) {
-                    console.log("domFiles[j]", domFiles[j]);
+                    
                     if (domFiles[j].getAttribute("data-name") === file.name) {
                         domFiles[j].remove();
                     }
@@ -167,9 +171,21 @@ function DSFileManager(settings)
     }
 
     deleteFile = function(file) {
-        console.log("deleteFile", file);
+
         file.htmlDOM.remove();
 
+        launchPublicFunction("onFileDelete", false);
+    }
+
+    const launchPublicFunction = function(funcName, interrupt) {
+
+        if (typeof settings[funcName] === "undefined") {
+            return false;
+        }
+
+        let result = settings[funcName]();
+
+        return result;
     }
 
     this.deleteFile = deleteFile;
