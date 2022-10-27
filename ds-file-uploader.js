@@ -10,7 +10,10 @@ function DSFileUploader(formID, settings)
 
         settings.get = get;
         settings.set = set;
-                
+        detectRequestHeaders();
+        detectUploadUrl();
+        detectFolder();
+
         findFormObject();  
         findFormElements();
         findDropZones();
@@ -114,6 +117,7 @@ function DSFileUploader(formID, settings)
             files.push(file);
 
         set("files", files);
+        console.log("files", files);
     }
 
     const processFile = function(file) {
@@ -123,16 +127,21 @@ function DSFileUploader(formID, settings)
         file.fileReader = new FileReader();
         
         file.fileReader.file = file;
+
+        /*
+        console.log("file", file);
         setTimeout(function() {file.fileReader.readAsDataURL(file); },100);
         
         file.fileReader.onload = function() {
-            this.file.base64 = this.result;
+            if (this.file.size < 5000000) {
+                this.file.base64 = this.result;
+            }
             this.file.loaded = 1;
 
             areAllFilesLoaded();
             launchPublicFunction("onFileReady", false);
         }
-
+        */
         addFile(file);  
         
         
@@ -281,6 +290,115 @@ function DSFileUploader(formID, settings)
     }
 
 
+    const upload = async function() {
+        let files = get("files");
+
+        for (let i in files) {
+            let file  = files[i];
+
+            if (file.uploaded === 1)
+                continue;
+
+            if (file.size < 1500000) {
+                let result = await uploadFullFile(file);
+
+                if (result === false) {
+
+                    console.error("File was not uploaded, retry");
+                    setTimeout(function() {
+                        upload();
+                    }, 3000);
+
+                    break;
+                }                
+            }            
+        }
+    }
+
+    this.upload = upload;
+
+    const uploadFullFile = async function(file) {
+
+
+        
+        const promise = new Promise((resolve, reject) => {
+
+
+            file.fileReader.onload = async function() {
+
+                let inputs = {
+                    file : {
+                        name : file.name,
+                        size: file.size,
+                        type: file.type,
+                        source: file.source,
+                        lastModified : file.lastModified,
+                        base64 : this.result
+                    },
+                    folder : get("folder"),
+                    ds_file_uploader : 1,
+                    ds_file_type : "full-file"
+                }
+
+                try {
+                    const rawResponse = await fetch(get("uploadUrl"), {
+                        method: 'POST',
+                        headers: get("requestHeaders"),
+                        body: JSON.stringify(inputs)
+                    });
+                    
+                    const content = await rawResponse.json(); 
+                    if (content.status == "success") {
+                        resolve(true);
+                    }
+                    else {
+                        resolve(false);
+                    }
+                }   
+                catch(e) {
+                    console.error("uploadFillFile Error", e);
+                    resolve(false);
+                }
+            }
+
+            file.fileReader.readAsDataURL(file);
+        
+        });  
+          
+        
+          return promise;
+    }
+
+    const detectFolder = function() {
+        if (typeof settings.uploadUrl != "undefined") {
+            set("folder", settings.folder);
+        }
+        else  {
+            set("folder", "all-files");
+        }
+    }
+
+    const detectUploadUrl = function() {
+        if (typeof settings.uploadUrl != "undefined") {
+            set("uploadUrl", settings.uploadUrl);
+        }
+        else  {
+            set("uploadUrl", "/");
+        }
+    }
+
+
+    const detectRequestHeaders = function() {
+        if (typeof settings.headers != "undefined") {
+            set("requestHeaders", settings.headers);
+        }
+        else  {
+            set("requestHeaders", {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+              });
+        }
+    }
 
     settings.getCleanFiles = function() {
         let files = get("files");

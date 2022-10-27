@@ -28,6 +28,7 @@
 
 </form>
 
+<div id="upload-files"> Upload Files </div>
 <div id="my_form__fileManager" class="ds-file-manager"></div>
 
 <script src="ds-file-uploader.js"></script>
@@ -36,9 +37,13 @@
 
 
     let fileUploader = new DSFileUploader("my_form", {
-
+        folder : "user-id__1",
+        uploadUrl : "http://ds-file-uploader-server/"
     });
 
+    document.getElementById("upload-files").addEventListener("click", function() {
+        fileUploader.upload();
+    });
 
 </script>
 </body>
