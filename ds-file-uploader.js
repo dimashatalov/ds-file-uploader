@@ -6,10 +6,34 @@ function DSFileUploader(formID, settings)
     var args = {};
     var plugins = {};
     
+    const imageFormats = ["image/jpeg", "image/jpg", "image/png","image/gif"];
+    const videoFormats = ["video/mp4"];
+
     const construct = function() {
 
         settings.get = get;
         settings.set = set;
+
+        set("fileChunkBytes", 800000);
+        set("retries", 10);
+        set("uidPrefix", "no-preix");
+        
+        if (typeof settings.filesLimit != "undefined")
+            set("filesLimit", settings.filesLimit);
+
+        if (typeof settings.fileChunkBytes != "undefined")
+            set("filesLimit", settings.fileChunkBytes);
+            
+            
+        if (typeof settings.retries != "undefined")
+            set("retries", settings.retries);            
+
+        if (typeof settings.customVars != "undefined")
+            set("customVars", settings.customVars);
+
+        if (typeof settings.allowTypes != "undefined")
+            set("allowTypes", settings.allowTypes);            
+
         detectRequestHeaders();
         detectUploadUrl();
         detectFolder();
@@ -24,7 +48,7 @@ function DSFileUploader(formID, settings)
 
         connectPlugins();
 
-        console.log("plugins", plugins);
+        
 
     }
 
@@ -98,7 +122,18 @@ function DSFileUploader(formID, settings)
     const addFile = function(file) {
         
         let files = get("files");
-                
+        
+        let filesLimit = get("filesLimit");
+
+        if (filesLimit !== false && filesLimit <= files.length) {
+            return false;
+        }
+
+        let allowTypes = get("allowTypes");
+        if (allowTypes !== false && !allowTypes.includes(file.type)) {        
+            return false;
+        }
+
         if (files === false) {
             files = [];
         }
@@ -117,21 +152,23 @@ function DSFileUploader(formID, settings)
             files.push(file);
 
         set("files", files);
-        console.log("files", files);
+        
     }
 
     const processFile = function(file) {
             
-        console.log("file file", file);
+        
         file.loaded = 0;
-        file.fileReader = new FileReader();
-        
-        file.fileReader.file = file;
+        file.uploading = 0;
+        file.uploaded = 0;
+        file.pendingUpload = 0;
+        file.uploadError = 0;
+        file.currentChunk = 0;
+        file.chunksCount = 0;
+       
 
-        /*
-        console.log("file", file);
-        setTimeout(function() {file.fileReader.readAsDataURL(file); },100);
-        
+        file.fileReader = new FileReader();        
+        file.fileReader.file = file;
         file.fileReader.onload = function() {
             if (this.file.size < 5000000) {
                 this.file.base64 = this.result;
@@ -140,8 +177,11 @@ function DSFileUploader(formID, settings)
 
             areAllFilesLoaded();
             launchPublicFunction("onFileReady", false);
+            updateFileManager();
         }
-        */
+
+        setTimeout(function() {file.fileReader.readAsDataURL(file); },100);
+        
         addFile(file);  
         
         
@@ -183,6 +223,17 @@ function DSFileUploader(formID, settings)
             plugins.dsFileManager.drawFiles();
         }         
     }
+
+    const updateFileManager = function() {
+
+        launchPublicFunction("updateFileManager");
+
+        if (typeof  plugins.dsFileManager !== "undefined") {
+            let files = get("files");
+            plugins.dsFileManager.setFiles(files);
+            plugins.dsFileManager.drawFiles();        
+        }
+    }
     
 
     const onInputFileChange = function(e) {
@@ -209,9 +260,9 @@ function DSFileUploader(formID, settings)
 
         let dropZone = this.dropZone;
 
-        console.log("YEAA");
+        
         if (ev.dataTransfer.items) {
-            console.log("yes");
+            
             // Use DataTransferItemList interface to access the file(s)
             [...ev.dataTransfer.items].forEach((item, i) => {
               // If dropped items aren't files, reject them
@@ -225,7 +276,7 @@ function DSFileUploader(formID, settings)
             });
         }
         else {
-            console.log("noe");
+            
             // Use DataTransfer interface to access the file(s)
             [...ev.dataTransfer.files].forEach((file, i) => {
                 file.source = "drop";
@@ -284,46 +335,271 @@ function DSFileUploader(formID, settings)
                 fileInputs[name] = elements[name];
             }
         }
-        console.log("fileInputsfileInputs", fileInputs);
+        
         set("fileInputs", fileInputs);
         return fileInputs;
     }
 
 
     const upload = async function() {
+        let retries = get("retries");
         let files = get("files");
 
+
+        for (let i in files) {
+            let file  = files[i];
+
+            if (file.uploaded === 1) 
+                continue;
+
+            if (file.error === 1) {
+                file.error = 0
+                file.errorMessage = '';
+            }
+            
+            file.pendingUpload = 1;
+
+        }
+
+        updateFileManager();
+
+        let error = false;
         for (let i in files) {
             let file  = files[i];
 
             if (file.uploaded === 1)
                 continue;
 
-            if (file.size < 1500000) {
-                let result = await uploadFullFile(file);
+            if (file.size < get("fileChunkBytes")) {
+                
+                let res = false;
+                for (let retry = 0; retry < retries; retry++) {
+
+                    res = await uploadFullFile(file);
+                    if (res === true) {
+                        break; // no need retries
+                    }
+
+                    let wait = async function() {
+            
+                        const promise = new Promise((resolve, reject) => {            
+                           setTimeout(function() {
+                             resolve(true);}, 1000);
+                        });
+                
+                        return promise;                        
+                    }
+                    await wait()
+                }
+
+                if (res === false) {
+                    file.error = 1;
+                    file.uploading = 0;
+                    error = true;
+                    updateFileManager();
+                    
+                }            
+            } 
+            else 
+            if (file.size >=  get("fileChunkBytes")) {       
+                let result = await uploadFileByParts(file);
 
                 if (result === false) {
 
                     console.error("File was not uploaded, retry");
-                    setTimeout(function() {
-                        upload();
-                    }, 3000);
+                   
+                    file.uploading = 0;
+                    file.uploaded = 0;
+                    file.error = 1;
+                    file.pendingUpload = 0;
+                    error = true;
 
-                    break;
-                }                
-            }            
+                    
+                }   
+            }
+            else {
+                console.error("Undefined error with file", file);
+                continue;
+            }
         }
+
+    
+        if (typeof settings.finishedWithErrors != "undefined" && error === true) {
+            settings.finishedWithErrors();
+        }     
+
+        if (typeof settings.afterAllFilesUploaded != "undefined" && error === false) {
+            settings.afterAllFilesUploaded();
+        }        
     }
 
+  
+
     this.upload = upload;
+
+    const getGuid = function() {
+
+        if (typeof crypto === "undefined") {
+            let uid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+              });
+
+            return get("uidPrefix")+'-' + uid;
+        }
+        else {
+            let uid = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+
+            return get("uidPrefix")+'-' + uid;
+        }
+
+    }
+
+    const uploadFileByParts = async function(file) {
+       
+        var res = false;
+        
+        file.uploading   = 1;
+        file.chunksCount = Math.ceil(file.size/ get("fileChunkBytes"));
+        file.guid = getGuid();
+
+        updateFileManager();
+
+        let retries = get("retries");
+
+        for (let chunkIter = 0; chunkIter < file.chunksCount; chunkIter++) {
+            for (let retry = 0; retry < retries; retry++) {
+
+                file.currentChunk = chunkIter;
+                updateFileManager();
+                res = await readSendChunk(file);
+
+                if (res === true) 
+                    break; // no need retries
+
+            }
+
+            if (res === false) {                    
+                
+                break;
+            }
+        }
+
+        
+
+            
+        const promise = new Promise((resolve, reject) => {            
+            
+            if (res === true) {
+                file.uploaded = 1;
+                file.uploading = 0;
+                file.pendingUpload = 0;
+            }
+            else {
+                file.uploading = 0;
+                file.error = 1;
+                file.error = 1;                                                    
+                file.pendingUpload = 0;
+            }
+
+            updateFileManager();  
+
+            resolve(res);
+        });
+
+        return promise;
+    }
+
+
+
+    const readSendChunk = async function(file) {
+        var resolve = false;
+
+        const promise = new Promise((resolve, reject) => {            
+            
+            let offset =  get("fileChunkBytes") * file.currentChunk;
+            let length =  get("fileChunkBytes");
+            let blob = file.slice(offset, length + offset);
+            
+            file.fileReader = new FileReader();        
+            file.fileReader.file = file;
+
+            file.fileReader.onload = async function() {
+                let base64 = btoa(this.result)
+
+                let inputs = {
+                    file : {
+                        name : file.name,
+                        size: file.size,
+                        type: file.type,
+                        source: file.source,
+                        lastModified : file.lastModified,
+                    },
+                    folder : get("folder"),
+                    ds_file_uploader : 1,
+                    ds_file_type : "chunk",
+                    currentChunk : file.currentChunk,
+                    chunksCount  : file.chunksCount,
+                    chunkBase64  : base64,
+                    guid : file.guid,
+                    
+                }
+
+                if (get("customVars") !== false)
+                    inputs.customVars = get("customVars");
+
+
+
+                try {
+                    const rawResponse = await fetch(get("uploadUrl"), {
+                        method: 'POST',
+                        headers: get("requestHeaders"),
+                        body: JSON.stringify(inputs)
+                    });
+                    
+                    const content = await rawResponse.json(); 
+                    if (content.status == "success") {
+
+                        resolve(true);
+                    }
+                    else {
+
+                        resolve(false);
+                        if (typeof content.message != "undefined") {
+                            file.errorMessage = content.message;
+                        }                        
+                    }
+                }   
+                catch(e) {
+                    console.error("uploadFillFile Error", e);
+                    resolve(false);
+                }
+            }
+
+            file.fileReader.readAsBinaryString(blob);
+
+        });
+
+        return promise;
+
+    }
 
     const uploadFullFile = async function(file) {
 
 
-        
+        file.guid = getGuid();
+        file.uploading = 1;
+        file.pendingUpload = 0;
+
+        updateFileManager();
+
         const promise = new Promise((resolve, reject) => {
 
-
+            file.uploading = 1;
+            file.fileReader = new FileReader();        
+            file.fileReader.file = file;
             file.fileReader.onload = async function() {
 
                 let inputs = {
@@ -337,8 +613,12 @@ function DSFileUploader(formID, settings)
                     },
                     folder : get("folder"),
                     ds_file_uploader : 1,
-                    ds_file_type : "full-file"
+                    ds_file_type : "full-file",
+                    guid : file.guid
                 }
+
+                if (get("customVars") !== false)
+                    inputs.customVars = get("customVars");                
 
                 try {
                     const rawResponse = await fetch(get("uploadUrl"), {
@@ -349,14 +629,31 @@ function DSFileUploader(formID, settings)
                     
                     const content = await rawResponse.json(); 
                     if (content.status == "success") {
+                        file.uploaded = 1;
+                        file.uploading = 0;
+                        file.pendingUpload = 0;
+                        updateFileManager();
+
                         resolve(true);
                     }
                     else {
+                        file.pendingUpload = 0;
+
+                                         
+                        file.errorMessage = "Server";
+                        if (typeof content.message != "undefined") {
+                            file.errorMessage = content.message;
+                        }
+
+                        updateFileManager();
                         resolve(false);
                     }
                 }   
                 catch(e) {
                     console.error("uploadFillFile Error", e);
+                  
+                    file.errorMessage = "Server";
+                    file.pendingUpload = 0;                    
                     resolve(false);
                 }
             }
@@ -432,5 +729,9 @@ function DSFileUploader(formID, settings)
         return args[k];
     }
 
+
+    this.set = set;
+    this.get = get;
+    
     construct();
 }
