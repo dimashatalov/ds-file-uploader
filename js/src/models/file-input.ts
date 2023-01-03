@@ -26,7 +26,6 @@ class FileInput {
         this.files = [...this.dom.files];
 
         if (typeof this.settings.onFileSelection != "undefined") {
-
             let f = this.settings.onFileSelection.bind(this);
             f();
         }

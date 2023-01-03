@@ -1,0 +1,13 @@
+.ds-file-manager__container {
+    display: flex;
+    justify-content: flex-start;
+}
+
+    .ds-file-mamanger__file {
+        width: 200px;
+        position: relative;
+    }
+
+    .ds-file-mamanger__file-image > img {
+        width: 100%;
+    }

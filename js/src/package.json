@@ -15,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "slugify": "^1.6.5",
     "webpack": "^5.74.0"
   },
   "devDependencies": {
