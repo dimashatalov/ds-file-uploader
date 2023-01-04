@@ -28,7 +28,7 @@ class Uploader implements Uploader {
         var self = this;
 
         this.file.status = "uploading";
-
+        self.CallBacks.callback("file_uploading", this);
         this.chunksCount = Math.ceil(this.file.file.size/ this.settings.fileChunkBytes);
 
         for (let chunkIter = 0; chunkIter < this.chunksCount; chunkIter++) {

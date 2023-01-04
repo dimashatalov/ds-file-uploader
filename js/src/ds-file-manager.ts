@@ -37,6 +37,7 @@ class DSFileManager {
         });
         
         this.settings.DSFileUploader.CallBacks.listen("onCallBack", function() {
+            
             self.drawFiles();
         });        
     }
@@ -45,9 +46,9 @@ class DSFileManager {
         var self = this;
         
         this.files = self.settings.DSFileUploader.form.files;
-
+        console.log("drawFiles", this.files);
         this.files.map((file:any) => {
-            if (typeof file.drawn === "undefined" && file.status === "ready") {
+            if (typeof file.drawn === "undefined" && file.ready === true) {
                 file.HTML = self.makeHTML(file);
                 file.drawn = true;
 
@@ -55,9 +56,25 @@ class DSFileManager {
             }
             else 
             if (file.drawn) {
-                file.HTML.mainContainer.html.className = "ds-file-mamanger__file " + slugify(file.status) + file.status;
+                file.HTML.mainContainer.html.className = "ds-file-mamanger__file " + slugify(file.status);
             }
+
+            // Draw custom html
+            self.drawCustomHTML(file);
         });
+    }
+
+
+    drawCustomHTML(file:any)  {
+
+        if (typeof this.settings.deleteHTML !== "undefined") {
+            file.HTML.deleteIcon.html.innerHTML = this.settings.deleteHTML(file);
+        }
+
+        if (typeof this.settings.customHTML !== "undefined") {
+
+            file.HTML.customContainer.html.innerHTML = this.settings.customHTML(file);
+        }        
     }
 
     makeHTML(file:any) {
@@ -68,7 +85,8 @@ class DSFileManager {
             titleContainer  : this.titleContainer(file),
             typeContainer   : this.typeContainer(file),
             statusContainer : this.statusContainer(file),
-            deleteIcon      : this.deleteIcon(file)
+            deleteIcon      : this.deleteIcon(file),
+            customContainer : this.customContainer(file)
         }
 
         this.compileFile(file);
@@ -94,6 +112,7 @@ class DSFileManager {
 
         file.HTML.innerContainer.html.appendChild(file.HTML.statusContainer.html);
         file.HTML.innerContainer.html.appendChild(file.HTML.deleteIcon.html);
+        file.HTML.innerContainer.html.appendChild(file.HTML.customContainer.html);        
 
         file.HTML.deleteIcon.html.addEventListener("click", function() {
             console.log("delete_file", file);
@@ -132,6 +151,23 @@ class DSFileManager {
         out.create();
 
         return out;
+    }
+
+
+    customContainer(file:any) {
+        var self = this;
+
+        let out = {
+            html : document.createElement("div"),
+            create : function() {
+                this.html.classList.add("ds-file-mamanger__file-custom");
+            
+            }
+        }
+
+        out.create();
+
+        return out; 
     }
 
     imageContainer(file:any) {

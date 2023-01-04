@@ -117,8 +117,12 @@ class File {
                 file.base64 = false;
             }            
 
+
+            
             self.ready = true;
-            self.status = "ready";
+            if (self.status === "created") {
+                self.status = "ready";
+            }
 
             self.CallBacks.callback("file_ready", file);
         }
